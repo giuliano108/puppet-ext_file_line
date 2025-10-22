@@ -24,8 +24,15 @@ describe Puppet::Type.type(:ext_file_line).provider(:ruby) do
   end
 
   describe '#exists?' do
-    context 'when the line does not exist' do
+    context 'when the line does not exist and (implied) "ensure: present"' do
       it 'returns false' do
+        expect(provider.exists?).to eq(false)
+      end
+    end
+
+    context 'when the line does not exist and "ensure: absent"' do
+      it 'returns false, to say that there is nothing to change' do
+        resource[:ensure] = 'absent'
         expect(provider.exists?).to eq(false)
       end
     end
@@ -40,55 +47,51 @@ describe Puppet::Type.type(:ext_file_line).provider(:ruby) do
       end
     end
 
-    context 'with a match pattern and "ensure: absent"' do
-      let(:resource) do
-        Puppet::Type.type(:ext_file_line).new(
-          ensure: 'absent',
-          name: 'test',
-          path: tmpfile,
-          match: '^existing',
-          provider: described_class.name
-        )
+    context 'when the line does not exist and "ensure: absent"' do
+      it 'returns false' do
+        resource[:ensure] = 'absent'
+        expect(provider.exists?).to eq(false)
       end
+    end
 
-      it 'returns true when pattern matches' do
+    context 'with a matching pattern and "ensure: absent"' do
+      it 'returns true, to say that the line should be deleted' do
+        resource[:ensure] = 'absent'
+        resource[:match] = '^existing'
         expect(provider.exists?).to eq(true)
       end
     end
 
     context 'with a match pattern and (implied) "ensure: present"' do
-      let(:resource) do
-        Puppet::Type.type(:ext_file_line).new(
-          name: 'test',
-          path: tmpfile,
-          line: 'existing line',
-          match: '^existing.*$',
-          provider: described_class.name
-        )
-      end
-
-      it 'returns true when pattern matches' do
+      it 'returns true when pattern matches and the line would not be changed' do
+        resource[:line] = 'existing line'
+        resource[:match] = '^existing.*$'
         expect(provider.exists?).to eq(true)
       end
     end
 
     context 'with a _partial_ match pattern and (implied) "ensure: present"' do
-      # FIXME: I'm not sure if this is correct behaviour
-      #        An /^existing/ line does exist in the file
-      #        yet `exists?` returns false because of what it does with `gsub`.
-      #        Weird stuff.
-      let(:resource) do
-        Puppet::Type.type(:ext_file_line).new(
-          name: 'test',
-          path: tmpfile,
-          line: 'existing line',
-          match: '^existing',
-          provider: described_class.name
-        )
+      it 'returns false when the replacing the partial pattern would result in a changed line' do
+        resource[:match] = '^existing'
+        expect(provider.exists?).to eq(false)
       end
 
-      it 'returns true when pattern matches' do
+      it 'returns true when the replacing the partial pattern would result in an unchanged line' do
+        resource[:match] = '^existing'
+        resource[:line] = 'existing'
+        expect(provider.exists?).to eq(true)
+      end
+    end
+
+    context 'with `match_only_one_run`' do
+      it 'Puppet converges on the second run, after replacing a line in the first' do
+        resource[:match] = '^existing line$'
+        resource[:line] = 'new line'
+        resource[:match_only_one_run] = true
         expect(provider.exists?).to eq(false)
+        provider.create
+        provider.instance_variable_set(:@lines, nil)  # causes the file to be re-read
+        expect(provider.exists?).to eq(true)
       end
     end
   end

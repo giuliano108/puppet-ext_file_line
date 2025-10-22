@@ -9,30 +9,42 @@ Puppet::Type.type(:ext_file_line).provide(:ruby) do
     regex = Regexp.new(resource[:match]) if resource[:match]
 
     match_count = 0
+    line_would_change = false
     lines.each do |line|
-      str = nil
       if regex
         if line.chomp =~ regex
           match_count += 1
-
           if resource[:line]
-            str = line.chomp.gsub(regex, resource[:line])
-          else
-            return true
+            new_line = line.chomp.gsub(regex, resource[:line])
+            line_would_change = true if new_line != line.chomp
           end
-
-          return true if line.chomp == str
         end
       else
-        return true if line.chomp == resource[:line]
+        match_count += 1 if line.chomp == resource[:line]
       end
     end
 
-    if regex and match_count == 0
+    if resource[:ensure] == :present and regex and resource[:match_only_one_run] and match_count == 0
       return true
     end
 
-    return false
+    if resource[:ensure] == :absent and match_count > 0
+      return true
+    end
+
+    if resource[:ensure] == :absent and match_count == 0
+      return false
+    end
+
+    if resource[:ensure] == :present and match_count == 0
+      return false
+    end
+
+    if resource[:ensure] == :present and match_count > 0 and line_would_change
+      return false
+    end
+
+    return true
   end
 
   def create()

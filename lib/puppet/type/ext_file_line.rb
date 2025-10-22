@@ -47,6 +47,13 @@ Puppet::Type.newtype(:ext_file_line) do
     defaultto :true
   end
 
+  newparam(:match_only_one_run, :boolean => true, :parent => Puppet::Parameter::Boolean) do
+    desc "Causes the resource to be considered up-to-date as soon as `match` stops matching,
+        typically because a replacement already happened on the previous Puppet run"
+
+    defaultto :false
+  end
+
   # Autorequire the file resource if it's being managed
   autorequire(:file) do
     self[:path]
@@ -61,6 +68,10 @@ Puppet::Type.newtype(:ext_file_line) do
       unless self[:line]
         raise(Puppet::Error, "Must specify the 'line' parameter when ensure is present")
       end
+    end
+
+    if self[:match_only_one_run] and not self[:match]
+      raise(Puppet::Error, "Must specify the 'match' parameter when 'match_only_one_run' is true")
     end
   end
 end
